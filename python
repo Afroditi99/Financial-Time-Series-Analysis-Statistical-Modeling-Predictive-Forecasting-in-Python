@@ -1,0 +1,146 @@
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+import scipy.stats as stats
+from scipy.stats import skew, kurtosis, jarque_bera, shapiro
+from statsmodels.tsa.stattools import adfuller
+from statsmodels.graphics.tsaplots import plot_acf 
+from statsmodels.graphics.tsaplots import plot_pacf
+from statsmodels.stats.diagnostic import acorr_ljungbox
+from statsmodels.tsa.arima.model import ARIMA
+from statsmodels.sandbox.stats.runs import runstest_1samp
+
+# Load dataset (replace with actual filename)
+df = pd.read_csv("stock_data.csv", parse_dates=["Date"])
+df.set_index("Date", inplace=True)
+
+# Check for missing values and handle them
+print("Missing values:\n", df.isnull().sum())
+df.dropna(inplace=True)
+
+# Log transformation of prices and returns
+df["log_price"] = np.log(df["Price"])  
+df["log_returns"] = df["log_price"].diff()
+df.dropna(inplace=True)  # Remove NaN values after differencing
+
+# Plot log-transformed stock prices
+plt.figure(figsize=(10, 5))
+plt.plot(df.index, df["log_price"], label="Log Price", color="blue")
+plt.title("Log-Transformed Stock Prices Over Time")
+plt.xlabel("Date")
+plt.ylabel("Log Price")
+plt.legend()
+plt.show()
+
+# Plot log returns
+plt.figure(figsize=(10, 5))
+plt.plot(df.index, df["log_returns"], label="Log Returns", color="green")
+plt.title("Log Returns Over Time")
+plt.xlabel("Date")
+plt.ylabel("Log Returns")
+plt.legend()
+plt.show()
+
+# Plot Histogram for Normality Check
+plt.figure(figsize=(8, 5))
+sns.histplot(df["log_returns"], bins=50, kde=True, color="purple")
+plt.title("Histogram of Log Returns")
+plt.xlabel("Log Returns")
+plt.ylabel("Frequency")
+plt.show()
+
+#Plot QQ Plot for Normality Check
+stats.probplot(df["log_returns"], dist="norm", plot=plt)
+plt.title("QQ Plot of Log Returns")
+plt.show()
+
+# Plot Density Plot for Normality Check
+plt.figure(figsize=(8, 5))
+sns.kdeplot(df["log_returns"], color="red", linewidth=2)
+plt.title("Density Plot of Log Returns")
+plt.xlabel("Log Returns")
+plt.show()
+
+# Descriptive statistics
+print(df["log_returns"].describe())
+print("Skewness:", skew(df["log_returns"]))
+print("Kurtosis:", kurtosis(df["log_returns"]))
+
+# Normality tests: Jarque-Bera & Shapiro-Wilk
+jb_stat, jb_p = jarque_bera(df["log_returns"])
+print(f"Jarque-Bera Test: Statistic={jb_stat}, p-value={jb_p}")
+
+shapiro_stat, shapiro_p = shapiro(df["log_returns"])
+print(f"Shapiro-Wilk Test: Statistic={shapiro_stat}, p-value={shapiro_p}")
+
+# Augmented Dickey-Fuller (ADF) test for stationarity
+adf_stat, adf_p = adfuller(df["log_price"])
+print(f"ADF Test for Log Price: Statistic={adf_stat}, p-value={adf_p}")
+
+adf_stat, adf_p = adfuller(df["log_returns"])
+print(f"ADF Test for Returns: Statistic={adf_stat}, p-value={adf_p}")
+
+# Autocorrelation plot for log returns
+plt.figure(figsize=(10, 5))
+plot_acf(df["log_returns"], lags=40)
+plt.title("ACF of Log Returns")
+plt.xlabel("Lags")
+plt.ylabel("Autocorrelation")
+plt.show()
+
+# PACF Plot (Partial Autocorrelation Function)
+plt.figure(figsize=(8, 5))
+plot_pacf(df["log_returns"], lags=30)
+plt.title("PACF Plot of Log Returns")
+plt.xlabel("Lags")
+plt.ylabel("Partial Autocorrelation")
+plt.show()
+
+# Autocorrelation check using Ljung-Box test
+lb_stat, lb_p = acorr_ljungbox(df["log_returns"], lags=[20])
+print(f"Ljung-Box Test: Statistic={lb_stat[0]}, p-value={lb_p[0]}")
+
+
+# ARCH Effect Detection - Squared Returns Test
+df["sq_returns"] = df["log_returns"]**2
+lb_stat, lb_p = acorr_ljungbox(df["sq_returns"], lags=[20])
+print(f"Ljung-Box Test on Squared Returns: Statistic={lb_stat[0]}, p-value={lb_p[0]}")  
+
+# Runs Test for randomness
+runs_stat, runs_p = runstest_1samp(df["log_returns"])
+print(f"Runs Test: Statistic={runs_stat}, p-value={runs_p}")
+
+from statsmodels.tsa.arima.model import ARIMA
+
+# Fit ARIMA model (Assuming log returns are stationary)
+model = ARIMA(df["log_returns"], order=(1,0,1))  # Adjust p, d, q values as needed
+arima_result = model.fit()
+print(arima_result.summary())
+
+# Plot ARIMA predicted vs actual returns
+plt.figure(figsize=(10, 5))
+plt.plot(df.index, df["log_returns"], label="Actual Log Returns", color="blue")
+plt.plot(df.index, arima_result.fittedvalues, label="ARIMA Fitted Values", color="orange")
+plt.title("ARIMA Model Fitted Values vs Actual Log Returns")
+plt.xlabel("Date")
+plt.ylabel("Log Returns")
+plt.legend()
+plt.show()
+
+# Forecasting with ARIMA
+forecast_steps = 30  # Number of steps to forecast
+forecast = arima_result.get_forecast(steps=forecast_steps)
+
+# Plotting the forecast
+plt.figure(figsize=(10, 5))
+plt.plot(df.index, df["log_returns"], label="Actual Log Returns", color="blue")
+plt.plot(forecast.index, forecast.predicted_mean, label="ARIMA Forecast", color="orange")
+plt.title("ARIMA Forecast vs Actual Log Returns")
+plt.xlabel("Date")
+plt.ylabel("Log Returns")
+plt.legend()
+plt.show()          
+
+
+
